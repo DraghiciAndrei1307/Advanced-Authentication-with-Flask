@@ -24,8 +24,7 @@ db.init_app(app)
 
 # CREATE TABLE IN DB
 
-
-class User(db.Model):
+class User(UserMixin, db.Model): # UserMixin contains some special attributes and methods required for the log in
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(100), unique=True)
     password: Mapped[str] = mapped_column(String(100))
@@ -35,6 +34,7 @@ class User(db.Model):
 with app.app_context():
     db.create_all()
 
+# Log In and Register class object forms
 
 class RegisterForm(FlaskForm):
 
@@ -43,10 +43,27 @@ class RegisterForm(FlaskForm):
     password = PasswordField('Password', validators=[DataRequired()], render_kw={"placeholder": "Password"})
     submit = SubmitField('Sign me up.')
 
+class LoginForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired()], render_kw={"placeholder": "Email"})
+    password = PasswordField('Password', validators=[DataRequired()], render_kw={"placeholder": "Password"})
+    submit = SubmitField('Log me in.')
+
+## Flask-Login
+
+# Initialize the login manager
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+# Create a user_loader callback
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.execute(db.select(User).where(User.id == int(user_id))).scalar()
 
 @app.route('/')
 def home():
-    return render_template("index.html")
+    return render_template("index.html", logged_in = current_user.is_authenticated)
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -63,32 +80,59 @@ def register():
         db.session.add(new_user)
         db.session.commit()
 
-        return redirect(url_for('secrets', name = form.name.data))
+        login_user(new_user)
 
-    return render_template("register.html", form = form)
+        return redirect(url_for('secrets'))
+
+    return render_template("register.html", form = form, logged_in = current_user.is_authenticated)
 
 
-@app.route('/login')
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    return render_template("login.html")
+
+    form = LoginForm()
+
+    if form.validate_on_submit():
+        email = form.email.data
+        password = form.password.data
+
+        # Find user by email (check the DB)
+
+        selected_user = db.session.execute(db.select(User).where(User.email == email)).scalar()
+
+        # Check stored password hash against entered password hashed
+
+        if not selected_user:
+            flash('Email is incorrect.')
+            return redirect(url_for('login'))
+
+        elif not check_password_hash(selected_user.password, password): # check_password_hash function from werkzeug.security
+            flash('Invalid password.')
+            return redirect(url_for('login'))
+        else:
+            login_user(selected_user)
+            return redirect(url_for('secrets'))
+
+    return render_template("login.html", form = form, logged_in = current_user.is_authenticated)
 
 
-@app.route('/secrets/<name>')
-def secrets(name):
-    return render_template("secrets.html", name = name)
-
+@app.route('/secrets')
+@login_required
+def secrets():
+    return render_template("secrets.html", logged_in = current_user.is_authenticated)
 
 @app.route('/logout')
+@login_required
 def logout():
-    pass
-
+    logout_user()
+    return redirect(url_for('home'))
 
 @app.route('/download')
+@login_required
 def download():
     return send_from_directory(
         "./static/files", "cheat_sheet.pdf", as_attachment=True
     )
-
 
 if __name__ == "__main__":
     app.run(debug=True)

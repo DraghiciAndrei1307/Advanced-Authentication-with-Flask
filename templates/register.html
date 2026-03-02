@@ -3,15 +3,23 @@
 
 <div class="box">
 	<h1>Register</h1>
-    <form action="{{ url_for('register') }}" method="post">
 
-        {{ form.hidden_tag() }}
-        {{ form.name }}
-        {{ form.email }}
-        {{ form.password }}
-        {{ form.submit }}
+    {% if not logged_in %}
 
-    </form>
+        <form action="{{ url_for('register') }}" method="post">
+
+            {{ form.hidden_tag() }}
+            {{ form.name }}
+            {{ form.email }}
+            {{ form.password }}
+            {{ form.submit }}
+
+        </form>
+
+    {% else %}
+        <p>You are already logged in.</p>
+    {% endif %}
+
 </div>
 
 {% endblock %}
