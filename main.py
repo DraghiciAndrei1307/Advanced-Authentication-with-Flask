@@ -56,7 +56,9 @@ def register():
 
     if form.validate_on_submit():
 
-        new_user = User(email=form.email.data, name=form.name.data, password=form.password.data)
+        salted_password = generate_password_hash(password= form.password.data, method='pbkdf2:sha256', salt_length=8)
+
+        new_user = User(email=form.email.data, name=form.name.data, password=salted_password)
 
         db.session.add(new_user)
         db.session.commit()
